@@ -1,14 +1,7 @@
-import requests
-from openai import OpenAI
 import os
-from dotenv import load_dotenv
+from openai import OpenAI
 
-load_dotenv()
-
-# === НАСТРОЙКИ ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-VOICE_ID = os.getenv("VOICE_ID")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -21,7 +14,7 @@ def generate_topic():
             "content": "Придумай вирусную тему для YouTube Shorts про технологии"
         }]
     )
-    return r.choices[0].message.content
+    return r.choices[0].message.content.strip()
 
 
 # === 2. СЦЕНАРИЙ ===
@@ -30,37 +23,44 @@ def generate_script(topic):
         model="gpt-4.1-mini",
         messages=[{
             "role": "user",
-            "content": f"Напиши короткий текст (до 80 слов) с мощным хуком. Тема: {topic}"
+            "content": f"""
+            Напиши короткий текст (до 80 слов) для YouTube Shorts.
+            Сделай мощный хук в начале.
+            Без воды.
+            Тема: {topic}
+            """
         }]
     )
-    return r.choices[0].message.content
+    return r.choices[0].message.content.strip()
 
 
-# === 3. ОЗВУЧКА ===
+# === 3. ОЗВУЧКА (OpenAI TTS) ===
 def tts(text):
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
-
-    headers = {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "text": text,
-        "model_id": "eleven_multilingual_v2"
-    }
-
-    response = requests.post(url, json=data, headers=headers)
+    response = client.audio.speech.create(
+        model="gpt-4o-mini-tts",
+        voice="alloy",
+        input=text
+    )
 
     with open("voice.mp3", "wb") as f:
         f.write(response.content)
 
 
 # === 4. ВИДЕО ===
+# видео только внутри контейнера
+# def build_video():
+#     os.system("""
+#     ffmpeg -y -i assets/bg.mp4 -i voice.mp3 \
+#     -c:v copy -c:a aac -shortest final.mp4
+#     """)
+
+# сохранение видео вне контейнера
 def build_video():
+    os.makedirs("output", exist_ok=True)
+
     os.system("""
     ffmpeg -y -i assets/bg.mp4 -i voice.mp3 \
-    -c:v copy -c:a aac -shortest final.mp4
+    -c:v copy -c:a aac -shortest output/final.mp4
     """)
 
 
