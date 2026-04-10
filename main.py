@@ -55,12 +55,20 @@ def tts(text):
 #     """)
 
 # сохранение видео вне контейнера
+
 def build_video():
     os.makedirs("output", exist_ok=True)
 
     os.system("""
-    ffmpeg -y -i assets/bg.mp4 -i voice.mp3 \
-    -c:v copy -c:a aac -shortest output/final.mp4
+    ffmpeg -y \
+    -i assets/bg.mp4 \
+    -i voice.mp3 \
+    -map 0:v:0 \
+    -map 1:a:0 \
+    -c:v copy \
+    -c:a aac \
+    -shortest \
+    output/final.mp4
     """)
 
 
