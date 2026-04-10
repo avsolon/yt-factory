@@ -1,0 +1,26 @@
+#name: Deploy to Server
+#
+#on:
+#  push:
+#    branches:
+#      - main
+#
+#jobs:
+#  deploy:
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Connect via SSH and deploy
+#        uses: appleboy/ssh-action@v1.0.3
+#        with:
+#          host: ${{ secrets.SERVER_HOST }}
+#          username: root
+#          key: ${{ secrets.SERVER_SSH_KEY }}
+#          script: |
+#            cd /root/yt-factory || git clone https://github.com/USERNAME/yt-factory.git /root/yt-factory
+#            cd /root/yt-factory
+#
+#            git pull
+#
+#            docker compose down
+#            docker compose up --build -d

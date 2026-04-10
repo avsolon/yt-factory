@@ -1,0 +1,10 @@
+services:
+  yt-bot:
+    build: .
+    container_name: yt-factory
+    env_file:
+      - .env
+    volumes:
+      - ./assets:/app/assets
+      - ./output:/app/output
+
