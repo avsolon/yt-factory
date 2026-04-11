@@ -1,9 +1,13 @@
 import os
+import json
 import argparse
 import subprocess
 from openai import OpenAI
 from faster_whisper import WhisperModel
-import json
+
+MAX_DURATION = 45
+MIN_DURATION = 25
+MAX_WORDS = 120
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -34,12 +38,30 @@ def generate_topic():
 def generate_script(topic):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"Напиши короткий сценарий: {topic}"}]
+        messages=[
+            {
+                "role": "user",
+                "content": f"""
+                Ты сценарист YouTube Shorts.
+                Сделай видео на 25–40 секунд.              
+                Тема: {topic}           
+                ОГРАНИЧЕНИЯ:
+                - максимум {MAX_WORDS} слов
+                - короткие фразы
+                - динамичный стиль
+                - без воды
+                - это текст для озвучки                
+                ФОРМАТ:
+                Один связный текст без пунктов
+                """
+            }
+        ]
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content.strip()
 
 
 def tts(text):
+    text = text.strip()
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
         voice="alloy",
@@ -77,31 +99,30 @@ def generate_subtitles():
 # VIDEO
 # ======================
 def build_video(use_subtitles=True):
-
     os.makedirs("output", exist_ok=True)
-    duration = get_audio_duration("voice.mp3")
+
+    audio_duration = validate_audio_duration("voice.mp3")
 
     cmd = [
-        "ffmpeg",
-        "-y",
-
+        "ffmpeg", "-y",
         "-stream_loop", "-1",
         "-i", "assets/bg.mp4",
         "-i", "voice.mp3",
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "20",
         "-c:a", "aac",
-        "-t", str(duration),
+        "-t", str(audio_duration),
+        "-shortest",
     ]
 
-    vf_filters = []
     if use_subtitles:
-        vf_filters.append("subtitles=subtitles.srt")
-    if vf_filters:
-        cmd += ["-vf", ",".join(vf_filters)]
+        cmd += ["-vf", "subtitles=subtitles.srt"]
 
     cmd += ["output/final.mp4"]
+
     subprocess.run(cmd, check=True)
 
 def get_audio_duration(file):
@@ -120,6 +141,34 @@ def get_audio_duration(file):
 
     data = json.loads(result.stdout)
     return float(data["format"]["duration"])
+
+def validate_audio_duration(path):
+    duration = get_audio_duration(path)
+
+    print(f"🎧 Audio duration: {duration:.2f}s")
+
+    if duration > MAX_DURATION:
+        raise ValueError(f"❌ Слишком длинное видео: {duration:.1f}s (max {MAX_DURATION}s)")
+
+    if duration < MIN_DURATION:
+        print("⚠️ Слишком коротко, но продолжаем")
+
+    return duration
+
+def run_ai_pipeline():
+    topic = generate_topic()
+    print("🧠 Topic:", topic)
+
+    script = generate_script(topic)
+    print("✍️ Script:", script)
+
+    tts(script)
+
+    duration = validate_audio_duration("voice.mp3")
+
+    build_video(use_subtitles=True)
+
+    print("✅ DONE")
 
 # =======================
 # MAIN
@@ -158,4 +207,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if args.mode == "ai":
+        run_ai_pipeline()
+
+    elif args.mode == "user":
+        script = args.text
+
+        tts(script)
+        validate_audio_duration("voice.mp3")
+        build_video(use_subtitles=True)
