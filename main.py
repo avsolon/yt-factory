@@ -25,7 +25,7 @@ args = parser.parse_args()
 def generate_topic():
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": "Придумай тему для вирусного видео на тему камасутры"}]
+        messages=[{"role": "user", "content": "Придумай тему для вирусного видео"}]
     )
     return response.choices[0].message.content
 
