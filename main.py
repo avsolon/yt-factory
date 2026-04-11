@@ -98,7 +98,7 @@ def generate_subtitles():
 # ======================
 # VIDEO
 # ======================
-def build_video(use_subtitles=True):
+def build_video(audio_file="voice.mp3", use_subtitles=True):
     os.makedirs("output", exist_ok=True)
 
     audio_duration = validate_audio_duration("voice.mp3")
@@ -107,7 +107,7 @@ def build_video(use_subtitles=True):
         "ffmpeg", "-y",
         "-stream_loop", "-1",
         "-i", "assets/bg.mp4",
-        "-i", "voice.mp3",
+        "-i", audio_file,
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-c:v", "libx264",
@@ -148,12 +148,20 @@ def validate_audio_duration(path):
     print(f"🎧 Audio duration: {duration:.2f}s")
 
     if duration > MAX_DURATION:
-        raise ValueError(f"❌ Слишком длинное видео: {duration:.1f}s (max {MAX_DURATION}s)")
+        print(f"⚠️ Слишком длинно ({duration:.1f}s) → обрезаем до {MAX_DURATION}s")
 
-    if duration < MIN_DURATION:
-        print("⚠️ Слишком коротко, но продолжаем")
+        trimmed = "voice_cut.mp3"
 
-    return duration
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-i", path,
+            "-t", str(MAX_DURATION),
+            trimmed
+        ], check=True)
+
+        return MAX_DURATION, trimmed
+
+    return duration, path
 
 def run_ai_pipeline():
     topic = generate_topic()
@@ -164,9 +172,8 @@ def run_ai_pipeline():
 
     tts(script)
 
-    duration = validate_audio_duration("voice.mp3")
-
-    build_video(use_subtitles=True)
+    duration, audio_file = validate_audio_duration("voice.mp3")
+    build_video(audio_file=audio_file)
 
     print("✅ DONE")
 
