@@ -140,6 +140,10 @@ def validate_audio_duration(path):
 def build_video(audio_file="voice.mp3", use_subtitles=True):
     os.makedirs("output", exist_ok=True)
 
+    if use_subtitles and not os.path.exists("subtitles.srt"):
+        print("⚠️ subtitles.srt не найден → отключаем субтитры")
+        use_subtitles = False
+
     cmd = [
         "ffmpeg", "-y",
         "-stream_loop", "-1",
@@ -154,17 +158,13 @@ def build_video(audio_file="voice.mp3", use_subtitles=True):
     ]
 
     vf_filters = []
-
     if use_subtitles:
-        vf_filters.append("subtitles=subtitles.srt")
-
+        vf_filters.append(f"subtitles={os.path.abspath('subtitles.srt')}")
     if vf_filters:
         cmd += ["-vf", ",".join(vf_filters)]
-
     cmd += ["-shortest", "output/final.mp4"]
-
+    print("🎬 FFmpeg cmd:", " ".join(cmd))
     subprocess.run(cmd, check=True)
-
 
 
 def run_ai_pipeline():
@@ -174,8 +174,13 @@ def run_ai_pipeline():
     audio_file = tts(script)
     audio_file = validate_audio_duration(audio_file)
 
-    build_video(audio_file)
-
+    try:
+        generate_subtitles(audio_file)
+        use_subs = True
+    except Exception as e:
+        print("⚠️ Ошибка субтитров:", e)
+        use_subs = False
+    build_video(audio_file, use_subtitles=use_subs)
     print("DONE")
 
 # =======================
