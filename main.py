@@ -79,25 +79,29 @@ def generate_subtitles():
 def build_video(use_subtitles=True):
     os.makedirs("output", exist_ok=True)
 
-    cmd = """
-    ffmpeg -y \
-    -stream_loop -1 -i assets/bg.mp4 \
-    -i voice.mp3 \
-    """
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-stream_loop", "-1",
+        "-i", "assets/bg.mp4",
+        "-i", "voice.mp3",
+    ]
 
     if use_subtitles:
-        cmd += '-vf "subtitles=subtitles.srt" '
+        cmd += [
+            "-vf", "subtitles=subtitles.srt"
+        ]
 
-    cmd += """
-    -map 0:v:0 \
-    -map 1:a:0 \
-    -c:v libx264 \
-    -c:a aac \
-    -shortest \
-    output/final.mp4
-    """
+    cmd += [
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-shortest",
+        "output/final.mp4"
+    ]
 
-    subprocess.run(cmd, shell=True, check=True)
+    subprocess.run(cmd, check=True)
 
 
 # =======================
