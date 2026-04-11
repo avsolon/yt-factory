@@ -3,6 +3,7 @@ import argparse
 import subprocess
 from openai import OpenAI
 from faster_whisper import WhisperModel
+import json
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -76,35 +77,49 @@ def generate_subtitles():
 # VIDEO
 # ======================
 def build_video(use_subtitles=True):
-    import os
-    import subprocess
 
     os.makedirs("output", exist_ok=True)
+    duration = get_audio_duration("voice.mp3")
 
     cmd = [
         "ffmpeg",
         "-y",
+
         "-stream_loop", "-1",
         "-i", "assets/bg.mp4",
         "-i", "voice.mp3",
-    ]
-
-    if use_subtitles:
-        cmd += [
-            "-vf", "subtitles=subtitles.srt"
-        ]
-
-    cmd += [
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-c:v", "libx264",
         "-c:a", "aac",
-        "-shortest",
-        "output/final.mp4"
+        "-t", str(duration),
     ]
 
+    vf_filters = []
+    if use_subtitles:
+        vf_filters.append("subtitles=subtitles.srt")
+    if vf_filters:
+        cmd += ["-vf", ",".join(vf_filters)]
+
+    cmd += ["output/final.mp4"]
     subprocess.run(cmd, check=True)
 
+def get_audio_duration(file):
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
+        file
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if not result.stdout:
+        raise ValueError("ffprobe returned empty output")
+
+    data = json.loads(result.stdout)
+    return float(data["format"]["duration"])
 
 # =======================
 # MAIN
