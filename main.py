@@ -83,17 +83,20 @@ def format_time(seconds):
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
-def generate_subtitles():
-    print("Генерация субтитров...")
-    model = WhisperModel("base", compute_type="int8")
+def generate_subtitles(audio_file):
+    print("📝 Генерация субтитров...")
+    model = WhisperModel("tiny", compute_type="int8")
 
-    segments, _ = model.transcribe("voice.mp3")
+    segments, _ = model.transcribe(audio_file)
 
     with open("subtitles.srt", "w") as f:
         for i, segment in enumerate(segments, start=1):
             f.write(f"{i}\n")
             f.write(f"{format_time(segment.start)} --> {format_time(segment.end)}\n")
             f.write(f"{segment.text.strip()}\n\n")
+
+    if not os.path.exists("subtitles.srt"):
+        raise Exception("❌ subtitles.srt не создан")
 
 
 # =======================
@@ -152,8 +155,8 @@ def build_video(audio_file="voice.mp3", use_subtitles=True):
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "20",
+        "-preset", "ultrafast", #medium
+        "-crf", "28", #20
         "-c:a", "aac",
     ]
 
