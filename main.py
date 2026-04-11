@@ -1,122 +1,137 @@
 import os
+import argparse
 import subprocess
 from openai import OpenAI
 from faster_whisper import WhisperModel
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# =======================
+# CLI
+# =======================
+parser = argparse.ArgumentParser()
 
-# === 1. ТЕМА ===
+parser.add_argument("--mode", choices=["ai", "user"], default="ai")
+parser.add_argument("--text", type=str, help="User text")
+parser.add_argument("--no-subtitles", action="store_true")
+parser.add_argument("--audio-only", action="store_true")
+
+args = parser.parse_args()
+
+# =======================
+# GENERATION
+# =======================
+
 def generate_topic():
-    r = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{
-            "role": "user",
-            "content": "Придумай вирусную тему для YouTube Shorts про технологии"
-        }]
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Придумай тему для короткого видео"}]
     )
-    return r.choices[0].message.content.strip()
+    return response.choices[0].message.content
 
 
-# === 2. СЦЕНАРИЙ ===
 def generate_script(topic):
-    r = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{
-            "role": "user",
-            "content": f"""
-            Напиши короткий текст (до 80 слов) для YouTube Shorts.
-            Сделай мощный хук в начале.
-            Без воды.
-            Тема: {topic}
-            """
-        }]
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Напиши короткий сценарий: {topic}"}]
     )
-    return r.choices[0].message.content.strip()
+    return response.choices[0].message.content
 
 
-# === 3. ОЗВУЧКА (OpenAI TTS) ===
 def tts(text):
-    response = client.audio.speech.create(
+    with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
         voice="alloy",
         input=text
-    )
+    ) as response:
+        response.stream_to_file("voice.mp3")
 
-    with open("voice.mp3", "wb") as f:
-        f.write(response.content)
 
-# === 3. СУБТИТРЫ (WHISPER) ===
-def generate_subtitles():
-    model = WhisperModel("base", compute_type="int8")
-
-    segments, info = model.transcribe("voice.mp3")
-
-    with open("subtitles.srt", "w") as f:
-        for i, segment in enumerate(segments, start=1):
-            start = format_time(segment.start)
-            end = format_time(segment.end)
-            text = segment.text.strip()
-
-            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
-
+# =======================
+# SUBTITLES
+# =======================
 
 def format_time(seconds):
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     ms = int((seconds - int(seconds)) * 1000)
-
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
-# === 4. ВИДЕО ===
-# видео без субтитров
-# def build_video():
-#     os.makedirs("output", exist_ok=True)
-#
-#     os.system("""
-#     ffmpeg -y \
-#     -i assets/bg.mp4 \
-#     -i voice.mp3 \
-#     -map 0:v:0 \
-#     -map 1:a:0 \
-#     -c:v copy \
-#     -c:a aac \
-#     -shortest \
-#     output/final.mp4
-#     """)
 
-# видео с субтитрами
-def build_video():
-    import os
+def generate_subtitles():
+    print("Генерация субтитров...")
+    model = WhisperModel("base", compute_type="int8")
+
+    segments, _ = model.transcribe("voice.mp3")
+
+    with open("subtitles.srt", "w") as f:
+        for i, segment in enumerate(segments, start=1):
+            f.write(f"{i}\n")
+            f.write(f"{format_time(segment.start)} --> {format_time(segment.end)}\n")
+            f.write(f"{segment.text.strip()}\n\n")
+
+
+# =======================
+# VIDEO
+# =======================
+
+def build_video(use_subtitles=True):
     os.makedirs("output", exist_ok=True)
 
-    os.system("""
+    cmd = """
     ffmpeg -y \
-    -i assets/bg.mp4 \
+    -stream_loop -1 -i assets/bg.mp4 \
     -i voice.mp3 \
-    -vf "subtitles=subtitles.srt:force_style='FontSize=24,PrimaryColour=&Hffffff&'" \
+    """
+
+    if use_subtitles:
+        cmd += '-vf "subtitles=subtitles.srt" '
+
+    cmd += """
     -map 0:v:0 \
     -map 1:a:0 \
     -c:v libx264 \
     -c:a aac \
     -shortest \
     output/final.mp4
-    """)
+    """
+
+    subprocess.run(cmd, shell=True, check=True)
 
 
-# === MAIN ===
+# =======================
+# MAIN
+# =======================
+
 def main():
-    topic = generate_topic()
-    print("Тема:", topic)
+    # выбор текста
+    if args.mode == "ai":
+        topic = generate_topic()
+        print("Тема:", topic)
 
-    script = generate_script(topic)
+        script = generate_script(topic)
+    else:
+        if not args.text:
+            raise Exception("Нужно передать --text")
+        script = args.text
+
     print("Сценарий:", script)
 
+    # озвучка
     tts(script)
-    generate_subtitles()
-    build_video()
+
+    # если только аудио
+    if args.audio_only:
+        print("Готово: voice.mp3")
+        return
+
+    # субтитры
+    if not args.no_subtitles:
+        generate_subtitles()
+
+    # видео
+    build_video(use_subtitles=not args.no_subtitles)
 
     print("Готово: output/final.mp4")
 
