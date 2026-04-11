@@ -95,35 +95,9 @@ def generate_subtitles():
             f.write(f"{segment.text.strip()}\n\n")
 
 
-# ======================
-# VIDEO
-# ======================
-def build_video(audio_file="voice.mp3", use_subtitles=True):
-    os.makedirs("output", exist_ok=True)
-
-    audio_duration = validate_audio_duration("voice.mp3")
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-stream_loop", "-1",
-        "-i", "assets/bg.mp4",
-        "-i", audio_file,
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "20",
-        "-c:a", "aac",
-        "-t", str(audio_duration),
-        "-shortest",
-    ]
-
-    if use_subtitles:
-        cmd += ["-vf", "subtitles=subtitles.srt"]
-
-    cmd += ["output/final.mp4"]
-
-    subprocess.run(cmd, check=True)
+# =======================
+# AUDIO
+# =======================
 
 def get_audio_duration(file):
     cmd = [
@@ -135,11 +109,8 @@ def get_audio_duration(file):
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
-
-    if not result.stdout:
-        raise ValueError("ffprobe returned empty output")
-
     data = json.loads(result.stdout)
+
     return float(data["format"]["duration"])
 
 def validate_audio_duration(path):
@@ -159,9 +130,46 @@ def validate_audio_duration(path):
             trimmed
         ], check=True)
 
-        return MAX_DURATION, trimmed
+        return trimmed   # 👈 ТОЛЬКО ФАЙЛ
 
-    return duration, path
+    return path
+
+audio_file = validate_audio_duration("voice.mp3")
+audio_duration = get_audio_duration(audio_file)
+
+
+# ======================
+# VIDEO
+# ======================
+def build_video(audio_file="voice.mp3", use_subtitles=True):
+    os.makedirs("output", exist_ok=True)
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-stream_loop", "-1",
+        "-i", "assets/bg.mp4",
+        "-i", audio_file,
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "20",
+        "-c:a", "aac",
+    ]
+
+    vf_filters = []
+
+    if use_subtitles:
+        vf_filters.append("subtitles=subtitles.srt")
+
+    if vf_filters:
+        cmd += ["-vf", ",".join(vf_filters)]
+
+    cmd += ["-shortest", "output/final.mp4"]
+
+    subprocess.run(cmd, check=True)
+
+
 
 def run_ai_pipeline():
     topic = generate_topic()
@@ -171,8 +179,7 @@ def run_ai_pipeline():
     print("✍️ Script:", script)
 
     tts(script)
-
-    duration, audio_file = validate_audio_duration("voice.mp3")
+    audio_file = validate_audio_duration("voice.mp3")
     build_video(audio_file=audio_file)
 
     print("✅ DONE")
