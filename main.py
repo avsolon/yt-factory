@@ -72,11 +72,13 @@ def generate_subtitles():
             f.write(f"{segment.text.strip()}\n\n")
 
 
-# =======================
+# ======================
 # VIDEO
-# =======================
-
+# ======================
 def build_video(use_subtitles=True):
+    import os
+    import subprocess
+
     os.makedirs("output", exist_ok=True)
 
     cmd = [
