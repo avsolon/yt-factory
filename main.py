@@ -60,14 +60,15 @@ def generate_script(topic):
     return response.choices[0].message.content.strip()
 
 
-def tts(text):
-    text = text.strip()
+def tts(text, output="voice.mp3"):
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
         voice="alloy",
         input=text
     ) as response:
-        response.stream_to_file("voice.mp3")
+        response.stream_to_file(output)
+
+    return output
 
 
 # =======================
@@ -131,12 +132,7 @@ def validate_audio_duration(path):
         ], check=True)
 
         return trimmed   # 👈 ТОЛЬКО ФАЙЛ
-
     return path
-
-audio_file = validate_audio_duration("voice.mp3")
-audio_duration = get_audio_duration(audio_file)
-
 
 # ======================
 # VIDEO
@@ -173,16 +169,14 @@ def build_video(audio_file="voice.mp3", use_subtitles=True):
 
 def run_ai_pipeline():
     topic = generate_topic()
-    print("🧠 Topic:", topic)
-
     script = generate_script(topic)
-    print("✍️ Script:", script)
 
-    tts(script)
-    audio_file = validate_audio_duration("voice.mp3")
-    build_video(audio_file=audio_file)
+    audio_file = tts(script)
+    audio_file = validate_audio_duration(audio_file)
 
-    print("✅ DONE")
+    build_video(audio_file)
+
+    print("DONE")
 
 # =======================
 # MAIN
